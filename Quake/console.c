@@ -142,7 +142,7 @@ static void Con_Clear_f (void)
 {
 	if (con_text)
 		memset (con_text, ' ', con_buffersize); // johnfitz -- con_buffersize replaces CON_TEXTSIZE
-	con_backscroll = 0;                           // johnfitz -- if console is empty, being scrolled up is confusing
+	con_backscroll = 0;                         // johnfitz -- if console is empty, being scrolled up is confusing
 }
 
 /*
@@ -312,7 +312,7 @@ void Con_Init (void)
 	// johnfitz
 
 	con_text = (char *)Hunk_AllocName (con_buffersize, "context"); // johnfitz -- con_buffersize replaces CON_TEXTSIZE
-	memset (con_text, ' ', con_buffersize);                      // johnfitz -- con_buffersize replaces CON_TEXTSIZE
+	memset (con_text, ' ', con_buffersize);                        // johnfitz -- con_buffersize replaces CON_TEXTSIZE
 	con_linewidth = -1;
 
 	// johnfitz -- no need to run Con_CheckResize here
@@ -504,7 +504,7 @@ void Con_Printf (const char *fmt, ...)
 	Con_Print (msg);
 
 	// update the screen if the console is displayed
-	if (cls.signon != SIGNONS && !scr_disabled_for_loading)
+	if (cls.signon != SIGNONS && !scr_disabled_for_loading && !Tasks_IsWorker ())
 	{
 		// protect against infinite loop if something in SCR_UpdateScreen calls
 		// Con_Printd

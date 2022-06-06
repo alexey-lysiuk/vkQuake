@@ -29,7 +29,7 @@ extern cvar_t gl_fullbrights, r_drawflat, r_gpulightmapupdate; // johnfitz
 
 int gl_lightmap_format;
 
-#define SHELVES 4
+#define SHELVES      4
 #define SHELF_HEIGHT (LMBLOCK_HEIGHT / SHELVES)
 
 struct lightmap_s *lightmaps;
@@ -188,7 +188,7 @@ void DrawGLPoly (cb_context_t *cbx, glpoly_t *p, float color[3], float alpha)
 R_DrawBrushModel
 =================
 */
-void R_DrawBrushModel (cb_context_t *cbx, entity_t *e)
+void R_DrawBrushModel (cb_context_t *cbx, entity_t *e, int chain)
 {
 	int         i, k;
 	msurface_t *psurf;
@@ -242,14 +242,14 @@ void R_DrawBrushModel (cb_context_t *cbx, entity_t *e)
 	MatrixMultiply (mvp, model_matrix);
 
 	R_PushConstants (cbx, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16 * sizeof (float), mvp);
-	R_ClearTextureChains (clmodel, chain_model);
+	R_ClearTextureChains (clmodel, chain);
 	for (i = 0; i < clmodel->nummodelsurfaces; i++, psurf++)
 	{
 		pplane = psurf->plane;
 		dot = DotProduct (modelorg, pplane->normal) - pplane->dist;
 		if (((psurf->flags & SURF_PLANEBACK) && (dot < -BACKFACE_EPSILON)) || (!(psurf->flags & SURF_PLANEBACK) && (dot > BACKFACE_EPSILON)))
 		{
-			R_ChainSurface (psurf, chain_model);
+			R_ChainSurface (psurf, chain);
 			if (!r_gpulightmapupdate.value)
 				R_RenderDynamicLightmaps (psurf);
 			else if (psurf->lightmaptexturenum >= 0)
@@ -258,8 +258,8 @@ void R_DrawBrushModel (cb_context_t *cbx, entity_t *e)
 		}
 	}
 
-	R_DrawTextureChains (cbx, clmodel, e, chain_model);
-	R_DrawTextureChains_Water (cbx, clmodel, e, chain_model);
+	R_DrawTextureChains (cbx, clmodel, e, chain);
+	R_DrawTextureChains_Water (cbx, clmodel, e, chain);
 	R_PushConstants (cbx, VK_SHADER_STAGE_ALL_GRAPHICS, 0, 16 * sizeof (float), vulkan_globals.view_projection_matrix);
 }
 
@@ -425,7 +425,7 @@ static int AllocBlock (int w, int h, int *x, int *y)
 					lightmaps[texnum].workgroup_bounds[i].maxs[j] = -FLT_MAX;
 				}
 			}
-			memset (used_columns[texnum], 0, sizeof(used_columns[texnum]));
+			memset (used_columns[texnum], 0, sizeof (used_columns[texnum]));
 			last_lightmap_allocated = texnum;
 		}
 
@@ -448,7 +448,7 @@ static int AllocBlock (int w, int h, int *x, int *y)
 		}
 		*x = columns[w];
 		*y = rows[w];
-		rows[w] += h; 
+		rows[w] += h;
 		return lightmap_idx[w];
 	}
 
@@ -1342,9 +1342,9 @@ void GL_PrepareSIMDData (void)
 #ifdef USE_SIMD
 	int i;
 
-	cl.worldmodel->soa_leafbounds = Hunk_Alloc (6 * sizeof (float) * ((cl.worldmodel->numleafs + 7) & ~7));
-	cl.worldmodel->surfvis = Hunk_Alloc ((cl.worldmodel->numsurfaces + 7) >> 3);
-	cl.worldmodel->soa_surfplanes = Hunk_Alloc (4 * sizeof (float) * ((cl.worldmodel->numsurfaces + 7) & ~7));
+	cl.worldmodel->soa_leafbounds = Hunk_Alloc (6 * sizeof (float) * ((cl.worldmodel->numleafs + 31) & ~7));
+	cl.worldmodel->surfvis = Hunk_Alloc (((cl.worldmodel->numsurfaces + 31) / 8));
+	cl.worldmodel->soa_surfplanes = Hunk_Alloc (4 * sizeof (float) * ((cl.worldmodel->numsurfaces + 31) & ~7));
 
 	for (i = 0; i < cl.worldmodel->numleafs; ++i)
 	{

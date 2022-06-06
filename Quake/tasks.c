@@ -37,6 +37,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define GUTTER_BITS          2
 #define MAX_WORKERS          32
 #define WORKER_HUNK_SIZE     (128 * 1024)
+#define WAIT_SPIN_COUNT      1000
+#define WAIT_SLEEP_COUNT     3
 
 COMPILE_TIME_ASSERT (tasks, MAX_PENDING_TASKS >= MAX_EXECUTABLE_TASKS);
 
@@ -77,14 +79,15 @@ typedef struct
 	uint32_t        limit;
 } task_counter_t;
 
-static int             num_workers = 0;
-static SDL_Thread    **worker_threads;
-static task_t          tasks[MAX_PENDING_TASKS];
-static task_queue_t   *free_task_queue;
-static task_queue_t   *executable_task_queue;
-static atomic_uint32_t current_task_id;
-static task_counter_t *indexed_task_counters;
-static uint8_t         steal_worker_indices[MAX_WORKERS * 2];
+static int                   num_workers = 0;
+static SDL_Thread          **worker_threads;
+static task_t                tasks[MAX_PENDING_TASKS];
+static task_queue_t         *free_task_queue;
+static task_queue_t         *executable_task_queue;
+static atomic_uint32_t       current_task_id;
+static task_counter_t       *indexed_task_counters;
+static uint8_t               steal_worker_indices[MAX_WORKERS * 2];
+static THREAD_LOCAL qboolean is_worker = false;
 
 /*
 ====================
@@ -128,6 +131,36 @@ static inline task_handle_t CreateTaskHandle (uint32_t index, int id)
 
 /*
 ====================
+SpinWaitSemaphore
+====================
+*/
+static inline void SpinWaitSemaphore (SDL_sem *semaphore)
+{
+	int remaining_sleeps = WAIT_SLEEP_COUNT;
+	int remaining_spins = WAIT_SPIN_COUNT;
+	int result = 0;
+	while ((result = SDL_SemTryWait (semaphore)) != 0)
+	{
+		if (--remaining_spins == 0)
+		{
+			if (--remaining_sleeps == 0)
+				break;
+			else
+				SDL_Delay (0);
+			remaining_spins = WAIT_SPIN_COUNT;
+#ifdef USE_SSE2
+			// Don't have to actually check for SSE2 support, the
+			// instruction is backwards compatible and executes as a NOP
+			_mm_pause ();
+#endif
+		}
+	}
+	if (result != 0)
+		SDL_SemWait (semaphore);
+}
+
+/*
+====================
 CreateTaskQueue
 ====================
 */
@@ -149,7 +182,7 @@ TaskQueuePush
 */
 static inline void TaskQueuePush (task_queue_t *queue, uint32_t task_index)
 {
-	SDL_SemWait (queue->push_semaphore);
+	SpinWaitSemaphore (queue->push_semaphore);
 	uint64_t state = Atomic_LoadUInt64 (&queue->state);
 	uint64_t new_state;
 	uint32_t head;
@@ -180,7 +213,7 @@ TaskQueuePop
 */
 static inline uint32_t TaskQueuePop (task_queue_t *queue)
 {
-	SDL_SemWait (queue->pop_semaphore);
+	SpinWaitSemaphore (queue->pop_semaphore);
 	uint64_t state = Atomic_LoadUInt64 (&queue->state);
 	uint64_t new_state;
 	uint32_t tail;
@@ -232,6 +265,7 @@ Task_Worker
 */
 static int Task_Worker (void *data)
 {
+	is_worker = true;
 	void *worker_hunk = malloc (WORKER_HUNK_SIZE);
 	Memory_InitWorkerHunk (worker_hunk, WORKER_HUNK_SIZE);
 
@@ -313,6 +347,16 @@ Tasks_NumWorkers
 int Tasks_NumWorkers (void)
 {
 	return num_workers;
+}
+
+/*
+====================
+Tasks_IsWorker
+====================
+*/
+qboolean Tasks_IsWorker (void)
+{
+	return is_worker;
 }
 
 /*
