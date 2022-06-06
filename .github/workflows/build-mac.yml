@@ -15,10 +15,5 @@ jobs:
     - uses: actions/checkout@v2
     - name: Install Dependencies
       run: brew install sdl2 vulkan-headers molten-vk
-    # - name: Install Vulkan SDK
-    #   uses: humbletim/setup-vulkan-sdk@v1.2.0
-    #   with:
-    #     vulkan-query-version: latest
-    #     vulkan-use-cache: true
     - name: Build vkQuake
       run: make --directory=Quake --jobs=3 --keep-going
