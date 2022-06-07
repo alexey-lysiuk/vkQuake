@@ -12,15 +12,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        configuration: [Release, Debug]
-        platform: [x64, Win32]
+        configuration: [Debug]
+        platform: [x64]
     steps:
     - uses: actions/checkout@v2
     - name: Install Vulkan SDK
       uses: humbletim/setup-vulkan-sdk@v1.2.0
       with:
         vulkan-query-version: latest
-        vulkan-components: Vulkan-Headers, Vulkan-Loader, Glslang
+        vulkan-components: Vulkan-Headers, Vulkan-Loader, Glslang, SPIRV-Tools
         vulkan-use-cache: true
     - name: Build vkQuake
       run: |
